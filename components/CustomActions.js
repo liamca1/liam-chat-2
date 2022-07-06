@@ -1,6 +1,6 @@
 import React from "react";
 import PropTypes from "prop-types";
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View, ViewPropTypes } from 'react-native';
 //imports for communicatios features (permission and device camera/image gallery)
 import * as ImagePicker from 'expo-image-picker';
 import * as Permissions from 'expo-permissions';
@@ -21,15 +21,17 @@ export default class CustomActions extends React.Component {
   //to select an existing picture
 
   imagePicker = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync.askAsync();
+    // ask for permission to access media library
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     try {
       if (status === 'granted') {
+        // pick image
         const result = await ImagePicker.launchImageLibraryAsync({
-          mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        }).catch(error => console.log(error));
-
+          mediaTypes: ImagePicker.MediaTypeOptions.Images, // only images are allowed
+        }).catch((error) => console.log(error));
+        // canceled process
         if (!result.cancelled) {
-          const imageUrl = await this.imageUpload(result.uri);
+          const imageUrl = await this.uploadImage(result.uri);
           this.props.onSend({ image: imageUrl });
         }
       }
@@ -62,12 +64,14 @@ export default class CustomActions extends React.Component {
   //to get user location
 
   getLocation = async () => {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
-        const result = await Location.getCurrentPositionAsync({}).catch((error) => console.log(error));
-        const longitude = JSON.stringify(results.coords.longitude);
-        const altitude = JSON.stringify(result.coords.latitude);
+        const result = await Location.getCurrentPositionAsync({}).catch(
+          (error) => console.log(error)
+        );
+
         if (result) {
           this.props.onSend({
             location: {
@@ -111,31 +115,34 @@ export default class CustomActions extends React.Component {
 
    //Upload images to firestore
 
-  uploadImageFetch = async (uri) => {
-  const blob = await new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.onload = function () {
-      resolve(xhr.response);
-    };
-    xhr.onerror = function (e) {
-      console.log(e);
-      reject(new TypeError('Network request failed'));
-    };
-    xhr.responseType = 'blob';
-    xhr.open('GET', uri, true);
-    xhr.send(null);
-  });
+   uploadImageFetch = async (uri) => {
+    // create XMLHttpRequest and set its responseType to 'blob'.
+    const blob = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.onload = function () {
+        resolve(xhr.response);
+      };
+      xhr.onerror = function (e) {
+        console.log(e);
+        reject(new TypeError('Network request failed'));
+      };
+      xhr.responseType = 'blob';
+      //open the connection and get the URI’s data (the image)
+      xhr.open('GET', uri, true);
+      xhr.send(null);
+    });
 
-  const imageNameBefore = uri.split("/");
-  const imageName = imageNameBefore[imageNameBefore.length - 1];
-
-  const ref = firebase.storage().ref().child(`images/${imageName}`);
-  const snapshot = await ref.put(blob);
-
-  blob.close();
-
-  return await snapshot.ref.getDownloadURL();
-}
+    const imageNameBefore = uri.split('/');
+    const imageName = imageNameBefore[imageNameBefore.length - 1];
+    //reference to the image in which you put the blob data:
+    const ref = firebase.storage().ref().child(`images/${imageName}`);
+    //store the content retrieved from the Ajax request:
+    const snapshot = await ref.put(blob);
+    // close connection:
+    blob.close();
+    //get image URL from storage:
+    return await snapshot.ref.getDownloadURL();
+  };
 
   render() {
     return (
